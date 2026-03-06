@@ -10,18 +10,20 @@ namespace CardMatching
             Console.WriteLine("=== 카드 짝 맞추기 게임 ===");
             bool gameFlagInMain = true;
 
-            Mode mode = new Mode();
+            Mode mode;
             ChooseMode();
 
             Difficulty difficulty;
             ChooseDifficulty();
 
+            BoardSize boardSize;
+            ChooseBoardSize();
 
             Skin skin = new Skin();
             ChooseSkin();
 
             
-            GameManager gm = new GameManager((int)difficulty, skin, mode);
+            GameManager gm = new GameManager(difficulty, skin, mode, boardSize);
             Thread.Sleep(1000);
             gm.StartGame();
 
@@ -120,6 +122,51 @@ namespace CardMatching
                         break;
                 }
             }
+
+            void ChooseBoardSize()
+            {
+                Console.Write("\n보드 크기를 선택하세요: \n1. (2x4)\n2. (4x4)\n3. (6x4)\n선택: ");
+                string input;
+                while (true)
+                {
+                    input = Console.ReadLine();
+                    if (int.TryParse(input, out int result))
+                    {
+                        if (result < 1 || result > 3)
+                        {
+                            Console.WriteLine("1-3 사이의 숫자를 입력하세요!");
+                        }
+                        else
+                        {
+                            break;
+                        }
+                    }
+                    else
+                    {
+                        Console.WriteLine("숫자를 입력하세요!");
+                    }
+                }
+                switch (input)
+                {
+
+                    case "1":
+                        Console.WriteLine("2x4 사이즈를 선택하셨습니다!");
+                        boardSize = BoardSize.Small;
+                        break;
+                    case "2":
+                        Console.WriteLine("4x4 사이즈를 선택하셨습니다!");
+                        boardSize = BoardSize.Medium;
+                        break;
+                    case "3":
+                        Console.WriteLine("6x4 사이즈를 선택하셨습니다!");
+                        boardSize = BoardSize.Large;
+                        break;
+                    default:
+                        boardSize = BoardSize.Medium;
+                        break;
+                }
+            }
+
             void ChooseSkin()
             {
                 Console.Write("\n스킨을 선택하세요: \n1. 숫자 \n2. 알파벳 \n3. 기호 \n선택: ");

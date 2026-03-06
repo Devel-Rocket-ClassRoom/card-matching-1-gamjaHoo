@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Text;
 using System.Threading;
+using System.Timers;
 
 namespace CardMatching
 {
@@ -20,6 +21,9 @@ namespace CardMatching
         bool failedBefore = false;
         int maxFailRow;
 
+        int timeLimitSeconds;
+        DateTime startTime;
+
         Difficulty difficulty;
         Skin skin;
         Mode mode;
@@ -34,36 +38,42 @@ namespace CardMatching
             ConsoleColor.White,
             ConsoleColor.DarkYellow
         };
+        BoardSize boardSize;
 
 
-        public GameManager(int n, Skin skin, Mode mode)
+        public GameManager(Difficulty diff, Skin skin, Mode mode, BoardSize boardSize)
         {
-            board = new Card[n, 4];
-            row = n;
+            board = new Card[(int)boardSize, 4];
+            row = (int)boardSize;
             col = 4;
             this.skin = skin;
-            difficulty = (Difficulty)n;
+            difficulty = diff;
             switch (difficulty)
             {
                 case Difficulty.Easy:
                     maxTryCount = 10;
                     maxFailRow = 10;
+                    timeLimitSeconds = 60;
                     break;
                 case Difficulty.Normal:
                     maxTryCount = 20;
                     maxFailRow = 5;
+                    timeLimitSeconds = 90;
                     break;
                 case Difficulty.Hard:
                     maxTryCount = 30;
                     maxFailRow = 3;
+                    timeLimitSeconds = 120;
                     break;
                 default:
                     maxTryCount = 20;
                     maxFailRow = 5;
+                    timeLimitSeconds = 90;
                     break;
             }
 
             this.mode = mode;
+            this.boardSize = boardSize;
         }
 
         public void StartGame()
@@ -223,6 +233,12 @@ namespace CardMatching
             tryCount = 0;
             Thread.Sleep(800);
         }
+        private void PrintTimeGameOver()
+        {
+            Console.WriteLine("\n⏰ 시간 초과! 게임 오버!");
+            Thread.Sleep(800);
+        }
+
         private void PrintSurvivalGameOver()
         {
             Console.WriteLine($"연속으로 {maxFailRow}번 틀렸습니다. 게임오버!");
@@ -370,37 +386,43 @@ namespace CardMatching
 
             }
         }
+
         private void TimeAttackMode()
         {
             bool gameFlag = true;
-
             while (gameFlag)
             {
+                startTime = DateTime.Now;
+
                 tryCount = 0;
                 matchCount = 0;
 
                 ShuffleCards();
                 startShow();
 
+
                 while (matchCount < row * col / 2)
                 {
+                    TimeSpan elapsed = DateTime.Now - startTime;
+                    //int remaining = timeLimitSeconds - (int)elapsed.TotalSeconds;
+
+                    //if (remaining < 0) remaining = 0;
+
                     PrintBoard();
+                    Console.WriteLine($"\n남은 시간: {DateTime.Now - startTime}초 / {timeLimitSeconds} | 찾은 쌍: {matchCount} / {board.Length / 2}");
 
-                    Console.WriteLine($"\n시도 횟수: {tryCount} | 찾은 쌍: {matchCount} / {board.Length / 2}");
-
-                    PlayTurn();
-
-                    if (tryCount > maxTryCount)
+                    if (elapsed.TotalSeconds >= timeLimitSeconds)
                     {
-                        PrintTryGameOver();
+                        PrintTimeGameOver();
                         break;
                     }
+                    PlayTurn();
                 }
 
                 gameFlag = AskRestart();
-
             }
         }
+
         private void SurvivalMode()
         {
             bool gameFlag = true;
