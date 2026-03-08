@@ -1,101 +1,115 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Text;
 using System.Threading;
-using System.Timers;
 
 namespace CardMatching
 {
-    internal class GameManager
+    class GameManager
     {
         private Card[,] board;
+        private int row;
+        private int col = 4;
+        private Difficulty difficulty;
 
-        int row;
-        int col;
+        public int TryCount { get; private set; }
+        public int MatchCount { get; private set; }
+        public int FailRowCount { get; private set; }
 
-        int tryCount;
-        int maxTryCount;
-        int matchCount;
+        public int MaxTryCount { get; private set; }
+        public int MaxFailRow { get; private set; }
+        public int TimeLimitSeconds { get; private set; }
 
-        int failRowCount;
-        bool failedBefore = false;
-        int maxFailRow;
+        public int TotalPairs => row * col / 2;
 
-        int timeLimitSeconds;
-        DateTime startTime;
+        private ICardSkin skin;
+        private IGameMode mode;
 
-        Difficulty difficulty;
-        Skin skin;
-        Mode mode;
-        ConsoleColor[] colors =
+        public GameManager(Difficulty difficulty, BoardSize size, ICardSkin skin, IGameMode mode)
         {
-            ConsoleColor.Yellow,
-            ConsoleColor.Blue,
-            ConsoleColor.Red,
-            ConsoleColor.Green,
-            ConsoleColor.Cyan,
-            ConsoleColor.Magenta,
-            ConsoleColor.White,
-            ConsoleColor.DarkYellow
-        };
-        BoardSize boardSize;
+            row = (int)size;
+            board = new Card[row, col];
 
-
-        public GameManager(Difficulty diff, Skin skin, Mode mode, BoardSize boardSize)
-        {
-            board = new Card[(int)boardSize, 4];
-            row = (int)boardSize;
-            col = 4;
             this.skin = skin;
-            difficulty = diff;
-            switch (difficulty)
-            {
-                case Difficulty.Easy:
-                    maxTryCount = 10;
-                    maxFailRow = 10;
-                    timeLimitSeconds = 60;
-                    break;
-                case Difficulty.Normal:
-                    maxTryCount = 20;
-                    maxFailRow = 5;
-                    timeLimitSeconds = 90;
-                    break;
-                case Difficulty.Hard:
-                    maxTryCount = 30;
-                    maxFailRow = 3;
-                    timeLimitSeconds = 120;
-                    break;
-                default:
-                    maxTryCount = 20;
-                    maxFailRow = 5;
-                    timeLimitSeconds = 90;
-                    break;
-            }
-
             this.mode = mode;
-            this.boardSize = boardSize;
+            this.difficulty = difficulty;
+
+            if (size == BoardSize.Small)
+            {
+                if (difficulty == Difficulty.Easy)
+                {
+                    MaxTryCount = 12;
+                    MaxFailRow = 6;
+                    TimeLimitSeconds = 60;
+                }
+                else if (difficulty == Difficulty.Normal)
+                {
+                    MaxTryCount = 9;
+                    MaxFailRow = 5;
+                    TimeLimitSeconds = 50;
+                }
+                else
+                {
+                    MaxTryCount = 6;
+                    MaxFailRow = 4;
+                    TimeLimitSeconds = 40;
+                }
+            }
+            else if (size == BoardSize.Medium)
+            {
+                if (difficulty == Difficulty.Easy)
+                {
+                    MaxTryCount = 20;
+                    MaxFailRow = 8;
+                    TimeLimitSeconds = 90;
+                }
+                else if (difficulty == Difficulty.Normal)
+                {
+                    MaxTryCount = 15;
+                    MaxFailRow = 6;
+                    TimeLimitSeconds = 75;
+                }
+                else
+                {
+                    MaxTryCount = 10;
+                    MaxFailRow = 4;
+                    TimeLimitSeconds = 60;
+                }
+            }
+            else
+            {
+                if (difficulty == Difficulty.Easy)
+                {
+                    MaxTryCount = 30;
+                    MaxFailRow = 10;
+                    TimeLimitSeconds = 120;
+                }
+                else if (difficulty == Difficulty.Normal)
+                {
+                    MaxTryCount = 24;
+                    MaxFailRow = 7;
+                    TimeLimitSeconds = 100;
+                }
+                else
+                {
+                    MaxTryCount = 18;
+                    MaxFailRow = 5;
+                    TimeLimitSeconds = 80;
+                }
+            }
         }
 
         public void StartGame()
         {
-            if(mode == Mode.Classic)
-            {
-                ClassicMode();
-            }
-            else if(mode == Mode.TimeAttack)
-            {
-
-            }
-            else if(mode == Mode.Survival)
-            {
-                SurvivalMode();
-            }
+            ShuffleCards();
+            Preview();
+            mode.Run(this);
         }
 
-        private void ShuffleCards()
+        public void ShuffleCards()
         {
             List<int> numbers = new List<int>();
-            for(int i = 0; i < row * col / 2; i++)
+
+            for (int i = 0; i < TotalPairs; i++)
             {
                 numbers.Add(i);
                 numbers.Add(i);
@@ -103,9 +117,9 @@ namespace CardMatching
 
             Random rand = new Random();
 
-            for(int i = numbers.Count - 1;i > 0; i--)
+            for (int i = numbers.Count - 1; i > 0; i--)
             {
-                int j = rand.Next(i+1);
+                int j = rand.Next(i + 1);
                 int temp = numbers[i];
                 numbers[i] = numbers[j];
                 numbers[j] = temp;
@@ -114,345 +128,146 @@ namespace CardMatching
             int index = 0;
 
             for (int i = 0; i < row; i++)
-            {
-                for(int j = 0; j < col; j++)
-                {
+                for (int j = 0; j < col; j++)
                     board[i, j] = new Card(numbers[index++], skin);
-                }
-            }
-            Console.WriteLine("카드를 섞는 중...");
-            Thread.Sleep(700);
         }
 
-        private void PrintBoard()
+        public void Preview()
+        {
+            for (int i = 0; i < row; i++)
+                for (int j = 0; j < col; j++)
+                    board[i, j].Matched = true;
+
+            PrintBoard();
+
+            int previewTime = 3;
+
+            switch (difficulty)
+            {
+                case Difficulty.Easy:
+                    previewTime = 5;
+                    break;
+
+                case Difficulty.Normal:
+                    previewTime = 3;
+                    break;
+
+                case Difficulty.Hard:
+                    previewTime = 2;
+                    break;
+            }
+
+            Console.WriteLine($"\n잘 기억하세요! ({previewTime}초 후 뒤집힙니다)");
+
+            Thread.Sleep(previewTime * 1000);
+
+            for (int i = 0; i < row; i++)
+                for (int j = 0; j < col; j++)
+                    board[i, j].Matched = false;
+
+            PrintBoard();
+        }
+
+        public void PrintBoard()
         {
             Console.Clear();
-            Console.Write("\n    ");
 
+            Console.Write("\n    ");
             for (int i = 0; i < col; i++)
-            {
-                Console.Write($" {i+1}열");
-            }
+                Console.Write($" {i + 1}열");
             Console.WriteLine();
 
-            for(int i = 0; i < row; i++)
+            for (int i = 0; i < row; i++)
             {
-                Console.Write($"{i+1}행  ");
+                Console.Write($"{i + 1}행 ");
 
-                for(int j = 0; j < col; j++)
+                for (int j = 0; j < col; j++)
                 {
                     Card card = board[i, j];
 
-                    if(card.Matched || card.Opened)
+                    if (card.Matched || card.Opened)
                     {
-                        if(skin != Skin.Number)
-                        {
-                            Console.ForegroundColor = GetColor(card.Number);
-                        }
+                        Console.ForegroundColor = skin.GetColor(card.Number);
+
                         if (card.Matched)
-                        {
-                            Console.Write($" {card} ");
-                            Console.ResetColor();
-                        }
+                            Console.Write($" {skin.GetDisplay(card.Number)} ");
                         else
-                        {
-                            Console.Write($" [{card}] ");
-                            Console.ResetColor();
-                        }
+                            Console.Write($"[{skin.GetDisplay(card.Number)}]");
+
+                        Console.ResetColor();
                     }
                     else
                     {
                         Console.Write(" ** ");
                     }
                 }
+
                 Console.WriteLine();
             }
         }
+
         public void PlayTurn()
         {
-            Console.Write("\n첫 번째 카드 선택 (행 열): ");
-            var first = GetValidCardInput();
-            int r1 = first.Item1;
-            int c1 = first.Item2;
+            Console.Write("\n첫 카드 선택 (행 열): ");
+            var first = GetInput();
 
-            board[r1, c1].Opened = true;
+            board[first.r, first.c].Opened = true;
             PrintBoard();
 
             Console.Write("\n두 번째 카드 선택 (행 열): ");
-            var second = GetValidCardInput();
-            int r2 = second.Item1;
-            int c2 = second.Item2;
+            var second = GetInput();
 
-            board[r2, c2].Opened = true;
+            board[second.r, second.c].Opened = true;
             PrintBoard();
 
-            tryCount++;
+            TryCount++;
 
-            if (CheckMatch(r1, c1, r2, c2))
+            if (board[first.r, first.c].Number == board[second.r, second.c].Number)
             {
+                board[first.r, first.c].Matched = true;
+                board[second.r, second.c].Matched = true;
+                MatchCount++;
+                FailRowCount = 0;
+
                 Console.WriteLine("\n짝을 찾았습니다!");
-
-                board[r1, c1].Matched = true;
-                board[r2, c2].Matched = true;
-
-                matchCount++;
-                failedBefore = true;
             }
             else
             {
+                FailRowCount++;
                 Console.WriteLine("\n짝이 맞지 않습니다!");
-                failedBefore = true;
-                failRowCount++;
-
                 Thread.Sleep(1000);
 
-                board[r1, c1].Opened = false;
-                board[r2, c2].Opened = false;
+                board[first.r, first.c].Opened = false;
+                board[second.r, second.c].Opened = false;
             }
         }
 
-        private bool CheckValidRow(int number)
+        private (int r, int c) GetInput()
         {
-            return number < row;
+            while (true)
+            {
+                string[] input = Console.ReadLine().Split();
+
+                if (input.Length != 2) continue;
+
+                if (int.TryParse(input[0], out int r) &&
+                    int.TryParse(input[1], out int c))
+                {
+                    r--;
+                    c--;
+
+                    if (r >= 0 && r < row && c >= 0 && c < col)
+                    {
+                        if (!board[r, c].Matched && !board[r, c].Opened)
+                            return (r, c);
+                    }
+                }
+            }
         }
-        private bool CheckValidCol(int number)
-        {
-            return number < col;
-        }
-        private bool CheckMatch(int r1, int c1, int r2, int c2)
-        {
-            return board[r1, c1].Number == board[r2, c2].Number;
-        }
+
         public bool GameClear()
         {
-            return matchCount == row * col / 2;
-        }
-        private void PrintTryGameOver()
-        {
-            Console.WriteLine("횟수제한 게임오버!");
-            tryCount = 0;
-            Thread.Sleep(800);
-        }
-        private void PrintTimeGameOver()
-        {
-            Console.WriteLine("\n⏰ 시간 초과! 게임 오버!");
-            Thread.Sleep(800);
-        }
-
-        private void PrintSurvivalGameOver()
-        {
-            Console.WriteLine($"연속으로 {maxFailRow}번 틀렸습니다. 게임오버!");
-            failRowCount = 0;
-            Thread.Sleep(800);
-        }
-
-        private void startShow()
-        {
-            for(int i = 0; i < row; i++)
-            {
-                for(int j  = 0; j < col; j++)
-                {
-                    board[i,j].Matched = true;
-                }
-            }
-            PrintBoard();
-            switch (difficulty)
-            {
-                case Difficulty.Easy:
-                    Console.WriteLine("\n잘 기억하세요! (5초 후 뒤집힙니다)");
-                    Thread.Sleep(5000);
-                    break;
-                case Difficulty.Normal:
-                    Console.WriteLine("\n잘 기억하세요! (3초 후 뒤집힙니다)");
-                    Thread.Sleep(3000);
-                    break;
-                case Difficulty.Hard:
-                    Console.WriteLine("\n잘 기억하세요! (2초 후 뒤집힙니다)");
-                    Thread.Sleep(2000);
-                    break;
-                default:
-                    Console.WriteLine("\n잘 기억하세요! (3초 후 뒤집힙니다)");
-                    Thread.Sleep(3000);
-                    break;
-            }
-            for (int i = 0; i < row; i++)
-            {
-                for (int j = 0; j < col; j++)
-                {
-                    board[i, j].Matched = false;
-                }
-            }
-            PrintBoard();
-        }
-        private (int, int) GetValidCardInput()
-        {
-            while (true)
-            {
-                string input = Console.ReadLine();
-
-                if (string.IsNullOrWhiteSpace(input))
-                {
-                    Console.Write("입력이 비어있습니다. 다시 입력: ");
-                    continue;
-                }
-
-                string[] parts = input.Split();
-
-                if (parts.Length != 2)
-                {
-                    Console.Write("행과 열을 입력하세요 (예: 1 3): ");
-                    continue;
-                }
-
-                if (!int.TryParse(parts[0], out int r) || !int.TryParse(parts[1], out int c))
-                {
-                    Console.Write("숫자를 입력하세요: ");
-                    continue;
-                }
-
-                r--;
-                c--;
-
-                if (r < 0 || r >= row || c < 0 || c >= col)
-                {
-                    Console.Write("범위를 벗어났습니다. 다시 입력: ");
-                    continue;
-                }
-
-                if (board[r, c].Matched)
-                {
-                    Console.Write("이미 맞춘 카드입니다. 다시 선택: ");
-                    continue;
-                }
-
-                if (board[r, c].Opened)
-                {
-                    Console.Write("이미 뒤집힌 카드입니다. 다시 선택: ");
-                    continue;
-                }
-
-                return (r, c);
-            }
-        }
-        private bool AskRestart()
-        {
-            while (true)
-            {
-                Console.Write("\n새 게임을 하시겠습니까? (Y / N): ");
-
-                string input = Console.ReadLine().ToLower();
-
-                if (input == "y")
-                    return true;
-
-                if (input == "n")
-                    return false;
-
-                Console.WriteLine("Y 또는 N 으로 입력해주세요.");
-            }
-        }
-        private ConsoleColor GetColor(int cardValue)
-        {
-            return colors[cardValue % 8];
-        }
-        private void ClassicMode()
-        {
-            bool gameFlag = true;
-
-            while (gameFlag)
-            {
-                tryCount = 0;
-                matchCount = 0;
-
-                ShuffleCards();
-                startShow();
-
-                while (matchCount < row * col / 2)
-                {
-                    PrintBoard();
-
-                    Console.WriteLine($"\n시도 횟수: {tryCount} | 찾은 쌍: {matchCount} / {board.Length / 2}");
-
-                    PlayTurn();
-
-                    if (tryCount > maxTryCount)
-                    {
-                        PrintTryGameOver();
-                        break;
-                    }
-                }
-
-                gameFlag = AskRestart();
-
-            }
-        }
-
-        private void TimeAttackMode()
-        {
-            bool gameFlag = true;
-            while (gameFlag)
-            {
-                startTime = DateTime.Now;
-
-                tryCount = 0;
-                matchCount = 0;
-
-                ShuffleCards();
-                startShow();
-
-
-                while (matchCount < row * col / 2)
-                {
-                    TimeSpan elapsed = DateTime.Now - startTime;
-                    //int remaining = timeLimitSeconds - (int)elapsed.TotalSeconds;
-
-                    //if (remaining < 0) remaining = 0;
-
-                    PrintBoard();
-                    Console.WriteLine($"\n남은 시간: {DateTime.Now - startTime}초 / {timeLimitSeconds} | 찾은 쌍: {matchCount} / {board.Length / 2}");
-
-                    if (elapsed.TotalSeconds >= timeLimitSeconds)
-                    {
-                        PrintTimeGameOver();
-                        break;
-                    }
-                    PlayTurn();
-                }
-
-                gameFlag = AskRestart();
-            }
-        }
-
-        private void SurvivalMode()
-        {
-            bool gameFlag = true;
-
-            while (gameFlag)
-            {
-                tryCount = 0;
-                matchCount = 0;
-
-                ShuffleCards();
-                startShow();
-
-                while (matchCount < row * col / 2)
-                {
-                    PrintBoard();
-
-                    Console.WriteLine($"\n연속 실패: {failRowCount} / {maxFailRow} | 찾은 쌍: {matchCount} / {board.Length / 2}");
-
-                    PlayTurn();
-
-                    if (failRowCount >= maxFailRow)
-                    {
-                        PrintSurvivalGameOver();
-                        break;
-                    }
-                }
-
-                gameFlag = AskRestart();
-
-            }
+            return MatchCount == TotalPairs;
         }
     }
 }
