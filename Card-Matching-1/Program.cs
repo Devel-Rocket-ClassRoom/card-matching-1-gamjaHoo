@@ -8,6 +8,7 @@ namespace CardMatching
         {
             Console.WriteLine("=== 카드 짝 맞추기 게임 ===");
 
+
             IGameMode mode = ChooseMode();
             Difficulty difficulty = ChooseDifficulty();
             BoardSize boardSize = ChooseBoardSize();
